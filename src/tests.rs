@@ -1,5 +1,5 @@
 use super::*;
-use openidea_plugin::{PluginRunConfiguration, ProcessOutput, mock::MockHost};
+use openidea_plugin::{ProcessOutput, mock::MockHost};
 
 const GRAPH: &str = r#"{
   "preset": "debug", "platform": "windows-x64", "compiler": "msvc",
@@ -26,15 +26,10 @@ fn workspace() -> MockHost {
         r#"{"presets":{"debug":{"config":"debug"}}}"#,
     );
     host.set_run_configurations(
-        [Action::Generate, Action::Build, Action::Run, Action::Test]
+        Slate::default()
+            .launch_configurations("/project")
             .into_iter()
-            .map(|action| PluginRunConfiguration {
-                id: action.run_configuration().into(),
-                name: format!("Slate {}", action.label()),
-                program: PROGRAM.into(),
-                args: vec![action.id().into()],
-                ..Default::default()
-            })
+            .map(|launch| launch.config)
             .collect(),
     );
     host
@@ -244,4 +239,33 @@ fn graph_without_test_dependencies_remains_browsable() {
             .iter()
             .any(|arg| arg == "--tests")
     );
+}
+
+#[test]
+fn enables_slate_ansi_without_replacing_color_preferences() {
+    let configs = Slate::default().launch_configurations("/project");
+    assert_eq!(configs.len(), Action::ALL.len());
+    for (launch, action) in configs.iter().zip(Action::ALL) {
+        assert_eq!(launch.config.id, action.run_configuration());
+        assert_eq!(launch.config.args, [action.id()]);
+        assert_eq!(launch.env, [("SLATE_CONSOLE".into(), "1".into())]);
+    }
+}
+
+#[test]
+fn launches_with_the_same_arguments_during_run_configuration_refresh() {
+    let host = workspace();
+    host.set_run_configurations(vec![PluginRunConfiguration {
+        id: CLI_CONFIGURATION.into(),
+        program: PROGRAM.into(),
+        ..Default::default()
+    }]);
+    let ctx = host.invocation();
+    Slate::default()
+        .run_command("build", &ctx, Some(&key("project", "app", "")))
+        .unwrap();
+    let runs = host.configuration_runs();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].1, CLI_CONFIGURATION);
+    assert_eq!(runs[0].2, ["build", "--root", "/project/app"]);
 }

@@ -3,13 +3,17 @@ mod manifests;
 use std::collections::{BTreeMap, BTreeSet};
 
 use openidea_plugin::views::{Body, Button, TreeItem, View, ViewEvent, Viewport, Views};
-use openidea_plugin::{Error, Invocation, Plugin, Project, host, register_plugin};
+use openidea_plugin::{
+    Error, Invocation, LaunchConfigurations, Plugin, PluginLaunchConfiguration,
+    PluginRunConfiguration, Project, host, register_plugin,
+};
 use serde::{Deserialize, Serialize};
 
 use manifests::{Presets, join, relative, slash};
 
 const VIEW: &str = "slate";
 const PROGRAM: &str = "slate";
+const CLI_CONFIGURATION: &str = "slate-cli";
 const PRESET_STORAGE: &str = "selected-presets";
 
 #[derive(Default)]
@@ -64,6 +68,8 @@ enum Action {
 }
 
 impl Action {
+    const ALL: [Self; 4] = [Self::Generate, Self::Build, Self::Run, Self::Test];
+
     fn from_id(id: &str) -> Option<Self> {
         Some(match id {
             "gen" => Self::Generate,
@@ -254,15 +260,17 @@ impl Workspace {
                 args.push("--tests".into());
             }
         }
-        host::start_run(action.run_configuration(), &args[1..], false)
-            .map(|_| ())
-            .map_err(|error| match error {
-                Error::NotFound(message) if !path.is_empty() => Error::NotFound(format!(
-                    "{message}. Open {} directly to use the Run panel.",
-                    join(root, &path)
-                )),
-                error => error,
-            })
+        let run = match host::start_run(action.run_configuration(), &args[1..], false) {
+            Err(Error::NotFound(_)) => host::start_run(CLI_CONFIGURATION, &args, false),
+            result => result,
+        };
+        run.map(|_| ()).map_err(|error| match error {
+            Error::NotFound(message) if !path.is_empty() => Error::NotFound(format!(
+                "{message}. Open {} directly to use the Run panel.",
+                join(root, &path)
+            )),
+            error => error,
+        })
     }
 }
 
@@ -331,6 +339,25 @@ impl Plugin for Slate {
             state.launch(&root, arg, action)?;
         }
         Ok(None)
+    }
+}
+
+impl LaunchConfigurations for Slate {
+    fn launch_configurations(&mut self, _root: &str) -> Vec<PluginLaunchConfiguration> {
+        Action::ALL
+            .into_iter()
+            .map(|action| PluginLaunchConfiguration {
+                config: PluginRunConfiguration {
+                    id: action.run_configuration().into(),
+                    name: format!("Slate {}", action.label()),
+                    program: PROGRAM.into(),
+                    args: vec![action.id().into()],
+                    ..Default::default()
+                },
+                env: vec![("SLATE_CONSOLE".into(), "1".into())],
+                ..Default::default()
+            })
+            .collect()
     }
 }
 
@@ -431,7 +458,7 @@ impl Views for Slate {
 }
 
 mod tree;
-register_plugin!(Slate, views);
+register_plugin!(Slate, views, launch_configurations);
 
 #[cfg(test)]
 mod tests;

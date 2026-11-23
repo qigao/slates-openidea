@@ -17,10 +17,12 @@ project to load its targets from Slate.
   window, with Stop and Rerun controls. The plugin supplies the selected
   project, preset, and target. Open a workspace containing `slate.json`
   or `apps/slate.json` to use these configurations.
+- Run-panel launches enable Slate's ANSI status colors. Slate honors
+  `NO_COLOR`, and the Run panel also renders ANSI output from child tools.
 
 ## Install
 
-Use OpenIDEA 0.1.40 or a later release supporting plugin API 1.4, and Slate
+Use OpenIDEA 0.1.46 or a later release supporting plugin API 1.9, and Slate
 0.1.14 or later. Install the `.oiplugin` package from **Settings → Plugins →
 Install Plugin from Disk**. A package for each successful build is attached
 to the [repository's GitHub Actions runs](https://github.com/qigao/slates-openidea/actions).
@@ -46,5 +48,5 @@ openidea-plugin build
 (cd dist && openidea-plugin pack ..)
 ```
 
-The SDK is pinned to OpenIDEA v0.1.40. The same WebAssembly component is used
+The SDK is pinned to OpenIDEA v0.1.46. The same WebAssembly component is used
 on Windows, Linux, and macOS.

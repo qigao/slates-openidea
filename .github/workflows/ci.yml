@@ -24,9 +24,9 @@ jobs:
       - name: Install OpenIDEA's plugin checker
         run: |
           curl --fail --silent --show-error --location --retry 3 \
-            https://github.com/l0ng-ai/openidea/releases/download/v0.1.40/openidea-plugin-linux-x86_64.gz \
+            https://github.com/l0ng-ai/openidea/releases/download/v0.1.46/openidea-plugin-linux-x86_64.gz \
             --output "$RUNNER_TEMP/openidea-plugin.gz"
-          echo "24ee120405fabe75b7404fbe57d39091385fd5a06361103a22596d87212e8fa0  $RUNNER_TEMP/openidea-plugin.gz" | sha256sum --check
+          echo "44ad6de38ef88c5190900df63a76f1934cb94b24d119ca1428a53e05996a9824  $RUNNER_TEMP/openidea-plugin.gz" | sha256sum --check
           gzip --decompress "$RUNNER_TEMP/openidea-plugin.gz"
           chmod +x "$RUNNER_TEMP/openidea-plugin"
       - name: Validate and package
