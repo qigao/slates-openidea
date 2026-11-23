@@ -158,8 +158,13 @@ pub fn render(workspace: &Workspace, root: &str) -> View {
         (Action::Run, "run"),
         (Action::Test, "test"),
     ] {
+        let label = if matches!(action, Action::Run) {
+            "Run Selected Target"
+        } else {
+            action.label()
+        };
         view.toolbar.push(
-            Button::new(action.id(), action.label()).icon(icon).enabled(
+            Button::new(action.id(), label).icon(icon).enabled(
                 selected
                     .as_ref()
                     .is_some_and(|(_, target)| action.enabled(*target)),

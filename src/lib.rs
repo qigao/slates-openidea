@@ -10,6 +10,7 @@ use manifests::{Presets, join, relative, slash};
 
 const VIEW: &str = "slate";
 const PROGRAM: &str = "slate";
+const RUN_CONFIGURATION: &str = "run-target";
 const PRESET_STORAGE: &str = "selected-presets";
 
 #[derive(Default)]
@@ -238,6 +239,16 @@ impl Workspace {
             if target.test && matches!(action, Action::Generate | Action::Build) {
                 args.push("--tests".into());
             }
+        }
+        if matches!(action, Action::Run) {
+            if !self.projects.contains_key("") && !self.projects.contains_key("apps") {
+                return Err(format!(
+                    "Open {} in OpenIDEA to run it in the Run panel.",
+                    join(root, &path)
+                )
+                .into());
+            }
+            return host::start_run(RUN_CONFIGURATION, &args[1..], false).map(|_| ());
         }
         let name = target.map_or_else(|| display_root(root, &path), |target| target.name.as_str());
         host::open_terminal(&format!("Slate {} {name}", action.label()), PROGRAM, &args)

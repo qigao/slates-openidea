@@ -24,15 +24,15 @@ jobs:
       - name: Install OpenIDEA's plugin checker
         run: |
           curl --fail --silent --show-error --location --retry 3 \
-            https://github.com/l0ng-ai/openidea/releases/download/v0.1.38/openidea-plugin-linux-x86_64.gz \
+            https://github.com/l0ng-ai/openidea/releases/download/v0.1.40/openidea-plugin-linux-x86_64.gz \
             --output "$RUNNER_TEMP/openidea-plugin.gz"
-          echo "035e22de24b9101651426f3a5626ec3cf938e321bf578aab7c83536fb67c089a  $RUNNER_TEMP/openidea-plugin.gz" | sha256sum --check
+          echo "24ee120405fabe75b7404fbe57d39091385fd5a06361103a22596d87212e8fa0  $RUNNER_TEMP/openidea-plugin.gz" | sha256sum --check
           gzip --decompress "$RUNNER_TEMP/openidea-plugin.gz"
           chmod +x "$RUNNER_TEMP/openidea-plugin"
       - name: Validate and package
         run: |
-          "$RUNNER_TEMP/openidea-plugin" pack . --out dist/qigao.slate-0.1.0.oiplugin
-          "$RUNNER_TEMP/openidea-plugin" check dist/qigao.slate-0.1.0.oiplugin
+          (cd dist && "$RUNNER_TEMP/openidea-plugin" pack ..)
+          "$RUNNER_TEMP/openidea-plugin" check dist/*.oiplugin
       - uses: actions/upload-artifact@v6
         with:
           name: slate-openidea

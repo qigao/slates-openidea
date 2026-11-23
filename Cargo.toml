@@ -1,6 +1,6 @@
 [package]
 name = "slates-openidea"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
 publish = false
@@ -10,6 +10,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 jsonc-parser = { version = "0.34", features = ["serde"] }
-openidea-plugin = { git = "https://github.com/l0ng-ai/openidea", tag = "v0.1.38" }
+openidea-plugin = { git = "https://github.com/l0ng-ai/openidea", tag = "v0.1.40" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

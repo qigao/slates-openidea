@@ -1,13 +1,13 @@
 id = "qigao.slate"
 name = "Slate Build"
-version = "0.1.0"
+version = "0.1.1"
 description = "Browse Slate projects, select presets, and build, run, or test targets from the sidebar."
 authors = ["Qigao"]
 license = "Apache-2.0"
 homepage = "https://github.com/qigao/slates-openidea"
 categories = ["tools"]
 icon = "slate.svg"
-engines.openidea = "^1.2"
+engines.openidea = "^1.4"
 wasm = "dist/plugin.wasm"
 activation = ["on-view:slate", "on-command:*"]
 
@@ -19,6 +19,13 @@ id = "slate"
 title = "Slate"
 icon = "slate.svg"
 location = "left"
+
+[[contributes.runDetectors]]
+id = "run-target"
+name = "Slate Run"
+files = ["slate.json", "apps/slate.json"]
+command = "slate"
+args = ["run"]
 
 [[contributes.commands]]
 id = "refresh"

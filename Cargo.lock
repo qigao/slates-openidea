@@ -106,8 +106,10 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "openidea-plugin"
 version = "0.1.0"
-source = "git+https://github.com/l0ng-ai/openidea?tag=v0.1.38#9c5372c7ab44207f0d3ac3d01fcb62af224091b7"
+source = "git+https://github.com/l0ng-ai/openidea?tag=v0.1.40#37c2a6048eea89d4f6db645622612358b643862b"
 dependencies = [
+ "serde",
+ "serde_json",
  "wit-bindgen",
 ]
 
@@ -190,7 +192,7 @@ dependencies = [
 
 [[package]]
 name = "slates-openidea"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "jsonc-parser",
  "openidea-plugin",
