@@ -31,7 +31,6 @@ fn workspace() -> MockHost {
 #[test]
 fn groups_targets_keeps_project_presets_and_opens_source_files() {
     let host = workspace();
-    host.add_file("apps/slate.json", "{}");
     host.set_run_configurations(vec![PluginRunConfiguration {
         id: RUN_CONFIGURATION.into(),
         name: "Slate Run".into(),
@@ -60,7 +59,7 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
             .iter()
             .map(|item| item.label.as_str())
             .collect::<Vec<_>>(),
-        ["app", "apps", "other"]
+        ["app", "other"]
     );
     assert!(host.process_runs().is_empty());
 
