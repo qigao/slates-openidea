@@ -10,9 +10,10 @@ project to load its targets from Slate.
 - Expand **Presets** and click a preset to select it. The selection
   is saved per Slate project. **Project default** restores the manifest's
   selection.
-- Click **Run** on an executable, **Build** on a project or target, or
-  **Test** on a test target. The toolbar also offers **Generate** and
-  acts on the current selection.
+- Click the play icon to **Run** an executable or the hammer icon to
+  **Build** a project or target. Hover over an icon for its action and
+  target name. Test targets have a **Test** button. The toolbar also
+  offers **Generate** and acts on the current selection.
 - Each action streams output to a named tab in OpenIDEA's **Run** tool
   window, with Stop and Rerun controls. The plugin supplies the selected
   project, preset, and target. Open a workspace containing `slate.json`
