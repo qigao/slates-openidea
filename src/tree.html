@@ -1,0 +1,117 @@
+<style>
+  body { margin: 2px 4px; }
+  ul { margin: 0; padding: 0; list-style: none; }
+  ul ul { padding-inline-start: 0.85em; }
+  .row { display: flex; align-items: center; min-width: 0; border-radius: 4px; }
+  .row:hover { background: var(--openidea-bg-hover); }
+  .row[data-current] { background: var(--openidea-bg-selected); }
+  button { min-height: 26px; border: 0; border-radius: 4px; padding: 2px 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  button:hover { background: var(--openidea-bg-hover); }
+  button:focus-visible { outline: 2px solid var(--openidea-focus-ring, Highlight); outline-offset: -2px; }
+  .toggle, .spacer, .run { flex: 0 0 26px; }
+  .label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: start; }
+  .label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .label > span:first-child { min-width: min(10ch, 60%); }
+  .detail { color: var(--openidea-fg-muted); }
+  .build, .test { min-width: 32px; font-size: 0.87em; }
+  .run { color: var(--openidea-success, #278553); }
+  .play { display: inline-block; background: currentColor; width: 11px; height: 12px; clip-path: polygon(0 0, 100% 50%, 0 100%); vertical-align: -1px; }
+  @media (forced-colors: active) { .play { background: ButtonText; } }
+</style>
+<ul id="projects" aria-label="Slate projects" role="list"></ul>
+<p id="loading" role="status">Loading Slate projects…</p>
+<script>
+  const workspace = /*WORKSPACE*/null;
+  const tree = document.getElementById("projects");
+  const loading = document.getElementById("loading");
+  const send = (action, data = {}) => openidea.postMessage(JSON.stringify({ action, ...data }));
+  const make = (tag, className, text) => {
+    const element = document.createElement(tag);
+    element.className = className;
+    if (text !== undefined) element.textContent = text;
+    return element;
+  };
+
+  function render({ rows, selected }) {
+    const previous = document.activeElement;
+    const fragment = document.createDocumentFragment();
+    const children = new Map([[null, fragment]]);
+    let focus;
+    for (const item of rows) {
+      const group = children.get(item.parent);
+      if (!group) continue;
+      const entry = make("li", "");
+      const row = make("div", "row");
+      if (item.key === selected) row.dataset.current = "";
+      const control = (name, label, text, click) => {
+        const button = make("button", name, text);
+        button.type = "button";
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        button.dataset.key = item.key;
+        button.dataset.control = name;
+        button.addEventListener("click", click);
+        if (previous?.dataset.key === item.key && previous.dataset.control === name) focus = button;
+        row.append(button);
+        return button;
+      };
+      const toggle = () => send("toggle", { key: item.key, expanded: !item.expanded });
+      if (item.expandable) {
+        control("toggle", (item.expanded ? "Collapse " : "Expand ") + item.label,
+          item.expanded ? "▾" : "▸", toggle).setAttribute("aria-expanded", item.expanded);
+      } else {
+        row.append(make("span", "spacer"));
+      }
+      const activate = item.kind === "preset" || item.kind === "file";
+      const label = control("label", item.label, undefined, () => {
+        if (item.expandable && (["folder", "presets", "targets"].includes(item.kind)
+          || (item.kind === "project" && !item.expanded))) toggle();
+        else send(activate ? "activate" : "select", { key: item.key });
+      });
+      label.append(make("span", "", item.label));
+      if (item.detail) label.append(make("span", "detail", item.detail));
+      if (item.key === selected) label.setAttribute("aria-current", "true");
+
+      const launch = (command) => () => send("launch", { command, key: item.key });
+      if (["project", "target", "run", "test"].includes(item.kind)) {
+        control("build", "Build " + item.label, "Build", launch("build"));
+      }
+      if (item.kind === "run") {
+        const run = control("run", "Run " + item.label, undefined, launch("run"));
+        const play = make("span", "play");
+        play.setAttribute("aria-hidden", "true");
+        run.append(play);
+      }
+      if (item.kind === "test") {
+        control("test", "Test " + item.label, "Test", launch("test"));
+      }
+      entry.append(row);
+      if (item.expanded) {
+        const subtree = document.createElement("ul");
+        subtree.setAttribute("role", "list");
+        entry.append(subtree);
+        children.set(item.key, subtree);
+      }
+      group.append(entry);
+    }
+    tree.replaceChildren(fragment);
+    focus?.focus({ preventScroll: true });
+  }
+
+  let attempts = 0;
+  const retry = setInterval(() => {
+    send("ready");
+    if (++attempts === 8) {
+      clearInterval(retry);
+      loading.textContent = "Use Refresh to load Slate projects.";
+    }
+  }, 300);
+  openidea.onMessage((message) => {
+    const snapshot = JSON.parse(message);
+    if (snapshot.workspace !== workspace) return;
+    clearInterval(retry);
+    loading.hidden = true;
+    render(snapshot);
+  });
+  send("ready");
+</script>

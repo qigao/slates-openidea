@@ -7,15 +7,18 @@ project to load its targets from Slate.
 - The project tree discovers `slate.json` at the workspace root and in
   subdirectories. Targets follow their module folders. Double-click a source
   or header to open it.
-- Expand **Presets** and double-click a preset to select it. The selection
+- Expand **Presets** and click a preset to select it. The selection
   is saved per Slate project. **Project default** restores the manifest's
   selection.
-- Select an executable and click the green **Run Selected Target** button.
-  Its output appears in OpenIDEA's **Run** tool window, with the IDE's Stop
-  and Rerun controls. Open the Slate project folder for this action. A
-  workspace containing `apps/slate.json` also works.
-- Use **Generate**, **Build**, and **Test** from the toolbar or the target
-  context menu. Their output streams through the Terminal tool window.
+- Click the green **Run** button on an executable's row. Its output appears
+  in OpenIDEA's **Run** tool window, with the IDE's Stop and Rerun controls.
+  Open the Slate project folder for this action. A workspace containing
+  `apps/slate.json` also works. The plugin registers a detected **Slate Run**
+  configuration and supplies the target, preset selection, and graph options
+  when you click Run.
+- Projects and targets have **Build** buttons, and test targets have a
+  **Test** button. The toolbar also acts on the current selection.
+  Generate, Build, and Test stream output through the Terminal tool window.
 
 ## Install
 

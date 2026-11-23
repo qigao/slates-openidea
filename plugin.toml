@@ -1,6 +1,6 @@
 id = "qigao.slate"
 name = "Slate Build"
-version = "0.1.1"
+version = "0.1.2"
 description = "Browse Slate projects, select presets, and build, run, or test targets from the sidebar."
 authors = ["Qigao"]
 license = "Apache-2.0"
@@ -51,27 +51,3 @@ category = "Slate"
 id = "test"
 title = "Slate: Test"
 category = "Slate"
-
-[[contributes.menus]]
-menu = "viewItem.context"
-view = "slate"
-command = "gen"
-when = "viewItemKind == project"
-
-[[contributes.menus]]
-menu = "viewItem.context"
-view = "slate"
-command = "build"
-when = "viewItemKind == project || viewItemKind == target || viewItemKind == run || viewItemKind == test"
-
-[[contributes.menus]]
-menu = "viewItem.context"
-view = "slate"
-command = "run"
-when = "viewItemKind == run"
-
-[[contributes.menus]]
-menu = "viewItem.context"
-view = "slate"
-command = "test"
-when = "viewItemKind == project || viewItemKind == test"

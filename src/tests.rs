@@ -28,6 +28,18 @@ fn workspace() -> MockHost {
     host
 }
 
+fn send(slate: &mut Slate, ctx: &Invocation, message: serde_json::Value) {
+    slate
+        .handle(VIEW, ViewEvent::Message(message.to_string()), ctx)
+        .unwrap();
+}
+
+fn visible_rows(host: &MockHost) -> Vec<serde_json::Value> {
+    let messages = host.view_messages();
+    let message: serde_json::Value = serde_json::from_str(&messages.last().unwrap().1).unwrap();
+    message["rows"].as_array().unwrap().clone()
+}
+
 #[test]
 fn groups_targets_keeps_project_presets_and_opens_source_files() {
     let host = workspace();
@@ -51,13 +63,12 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
     let ctx = host.invocation();
     let mut slate = Slate::default();
     let initial = slate.render(VIEW, None, &ctx).unwrap();
-    let Body::Tree(initial) = initial.body else {
-        panic!()
-    };
+    assert!(matches!(initial.body, Body::Html(_)));
+    send(&mut slate, &ctx, serde_json::json!({"action": "ready"}));
     assert_eq!(
-        initial
+        visible_rows(&host)
             .iter()
-            .map(|item| item.label.as_str())
+            .map(|item| item["label"].as_str().unwrap())
             .collect::<Vec<_>>(),
         ["app", "other"]
     );
@@ -74,15 +85,26 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
         )
         .unwrap();
     assert_eq!(chosen_presets()["/project/app"], "release");
-    let view = slate.render(VIEW, None, &ctx).unwrap();
-    let Body::Tree(rows) = view.body else {
-        panic!()
-    };
-    assert!(rows.iter().any(|item| item.label == "include"));
-    let source = rows.iter().find(|item| item.label == "main.c").unwrap();
-    slate
-        .handle(VIEW, ViewEvent::Activate(source.key.clone()), &ctx)
-        .unwrap();
+    for label in ["Targets", "examples", "hello", "hello", "src"] {
+        let rows = visible_rows(&host);
+        let item = rows
+            .iter()
+            .find(|item| item["label"] == label && item["expanded"] == false)
+            .unwrap();
+        send(
+            &mut slate,
+            &ctx,
+            serde_json::json!({"action": "toggle", "key": item["key"], "expanded": true}),
+        );
+    }
+    let rows = visible_rows(&host);
+    assert!(rows.iter().any(|item| item["label"] == "include"));
+    let source = rows.iter().find(|item| item["label"] == "main.c").unwrap();
+    send(
+        &mut slate,
+        &ctx,
+        serde_json::json!({"action": "activate", "key": source["key"]}),
+    );
     assert_eq!(
         host.opened_locations()[0].0,
         "/project/app/examples/hello/src/main.c"
@@ -98,9 +120,13 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
         .find(|button| button.id == "run")
         .unwrap();
     assert!(run.enabled);
-    slate
-        .handle(VIEW, ViewEvent::Button(run.id.clone()), &ctx)
-        .unwrap();
+    send(
+        &mut slate,
+        &ctx,
+        serde_json::json!({
+            "action": "launch", "command": "run", "key": key("run", "app", "hello")
+        }),
+    );
     let runs = host.configuration_runs();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].1, RUN_CONFIGURATION);
@@ -113,7 +139,8 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
             "--preset",
             "release",
             "--target",
-            "hello"
+            "hello",
+            "--tests"
         ]
     );
     assert!(host.terminals().is_empty());
@@ -130,7 +157,15 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
             .run_command("run", &ctx, Some(&key("target", "app", "math")))
             .is_err()
     );
-    assert_eq!(host.terminals().len(), 2);
+    send(
+        &mut slate,
+        &ctx,
+        serde_json::json!({
+            "action": "launch", "command": "build", "key": key("run", "app", "hello")
+        }),
+    );
+    assert_eq!(host.terminals()[2].args.last().unwrap(), "--tests");
+    assert_eq!(host.terminals().len(), 3);
     assert_eq!(host.configuration_runs().len(), 1);
 }
 
@@ -163,8 +198,10 @@ fn graph_without_test_dependencies_remains_browsable() {
         view.status.as_deref(),
         Some("Tests unavailable: missing test SDK")
     );
-    let Body::Tree(rows) = view.body else {
-        panic!()
-    };
-    assert!(rows.iter().any(|item| item.label == "hello"));
+    assert!(matches!(view.body, Body::Html(_)));
+    assert!(slate.workspaces["/project"].projects["app"].graph.is_some());
+    slate
+        .run_command("build", &ctx, Some(&key("run", "app", "hello")))
+        .unwrap();
+    assert!(!host.terminals()[0].args.iter().any(|arg| arg == "--tests"));
 }

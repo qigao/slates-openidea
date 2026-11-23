@@ -1,6 +1,27 @@
 use super::*;
 
-pub fn render(workspace: &Workspace, root: &str) -> View {
+#[derive(Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum Message {
+    Ready,
+    Toggle { key: String, expanded: bool },
+    Select { key: String },
+    Activate { key: String },
+    Launch { command: String, key: String },
+}
+
+#[derive(Serialize)]
+struct Row<'a> {
+    key: &'a str,
+    parent: Option<&'a str>,
+    label: &'a str,
+    detail: Option<&'a str>,
+    expandable: bool,
+    expanded: bool,
+    kind: &'a str,
+}
+
+fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
     let mut rows = Vec::new();
     let mut folders = BTreeSet::new();
     for (path, project) in &workspace.projects {
@@ -133,10 +154,53 @@ pub fn render(workspace: &Workspace, root: &str) -> View {
             }
         }
     }
-    let mut view = if rows.is_empty() {
+    rows
+}
+
+pub fn publish(workspace: &Workspace, root: &str) -> Result<(), Error> {
+    let items = rows(workspace, root);
+    let mut expanded = BTreeSet::new();
+    let rows: Vec<_> = items
+        .iter()
+        .filter_map(|item| {
+            let parent = item.parent.as_deref();
+            if parent.is_some_and(|key| !expanded.contains(key)) {
+                return None;
+            }
+            if item.expanded {
+                expanded.insert(item.key.as_str());
+            }
+            let kind = item.key.split_once(':').map_or("", |(kind, _)| kind);
+            Some(Row {
+                key: &item.key,
+                parent,
+                label: &item.label,
+                detail: item.detail.as_deref(),
+                expandable: item.expandable,
+                expanded: item.expanded,
+                kind,
+            })
+        })
+        .collect();
+    host::post_view_message(
+        VIEW,
+        &serde_json::json!({
+            "workspace": root,
+            "rows": rows,
+            "selected": workspace.selected,
+        })
+        .to_string(),
+    )
+}
+
+pub fn render(workspace: &Workspace, root: &str) -> View {
+    let mut view = if workspace.projects.is_empty() {
         View::message("No slate.json was found in this workspace.")
     } else {
-        View::new(Body::Tree(rows))
+        let root = serde_json::json!(root).to_string().replace('<', "\\u003c");
+        View::new(Body::Html(
+            include_str!("tree.html").replace("/*WORKSPACE*/null", &root),
+        ))
     };
     view.toolbar
         .push(Button::new("refresh", "Refresh").icon("refresh"));

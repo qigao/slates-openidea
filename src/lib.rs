@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use openidea_plugin::views::{Body, Button, TreeItem, View, ViewEvent, Viewport, Views};
 use openidea_plugin::{Error, Invocation, Plugin, Project, host, register_plugin};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use manifests::{Presets, join, relative, slash};
 
@@ -31,6 +31,7 @@ struct SlateProject {
     presets: Presets,
     selected_preset: Option<String>,
     graph: Option<Graph>,
+    graph_with_tests: bool,
     status: Option<String>,
 }
 
@@ -172,6 +173,7 @@ impl Workspace {
         let absolute = join(root, path);
         let manifest = join(path, "slate.json").trim_start_matches('/').to_owned();
         state.graph = None;
+        state.graph_with_tests = false;
         state.status = None;
         state.presets = match manifests::read(&manifest, |file| {
             project.read_file(file).map_err(|error| error.to_string())
@@ -188,7 +190,10 @@ impl Workspace {
         let mut args = state.args("graph", &absolute);
         args.extend(["--format".into(), "json".into(), "--tests".into()]);
         match read_graph(project, &args) {
-            Ok(graph) => state.graph = Some(graph),
+            Ok(graph) => {
+                state.graph = Some(graph);
+                state.graph_with_tests = true;
+            }
             Err(error) => {
                 args.pop();
                 match read_graph(project, &args) {
@@ -233,10 +238,11 @@ impl Workspace {
         if !action.enabled(target) {
             return Err("This action is unavailable for the selected target".into());
         }
-        let mut args = self.projects[&path].args(action.id(), &join(root, &path));
+        let project = &self.projects[&path];
+        let mut args = project.args(action.id(), &join(root, &path));
         if let Some(target) = target {
             args.extend(["--target".into(), target.name.clone()]);
-            if target.test && matches!(action, Action::Generate | Action::Build) {
+            if project.graph_with_tests && !matches!(action, Action::Test) {
                 args.push("--tests".into());
             }
         }
@@ -312,6 +318,7 @@ impl Plugin for Slate {
         if id == "refresh" {
             state.refresh(&project, &root)?;
             host::refresh_view(VIEW);
+            tree::publish(state, &root)?;
             host::reveal_view(VIEW)?;
         } else if let Some(action) = Action::from_id(id) {
             if !state.scanned {
@@ -340,6 +347,28 @@ impl Views for Slate {
         let project = ctx.project().ok_or("Open a project first")?;
         let root = slash(&project.root()?);
         let state = self.workspaces.entry(root.clone()).or_default();
+        let event = match event {
+            ViewEvent::Message(text) => match serde_json::from_str::<tree::Message>(&text)
+                .map_err(|error| Error::Invalid(error.to_string()))?
+            {
+                tree::Message::Ready => return tree::publish(state, &root),
+                tree::Message::Toggle {
+                    key,
+                    expanded: true,
+                } => ViewEvent::Expand(key),
+                tree::Message::Toggle {
+                    key,
+                    expanded: false,
+                } => ViewEvent::Collapse(key),
+                tree::Message::Select { key } => ViewEvent::Select(key),
+                tree::Message::Activate { key } => ViewEvent::Activate(key),
+                tree::Message::Launch { command, key } => {
+                    let action = Action::from_id(&command).ok_or("Unknown Slate action")?;
+                    return state.launch(&root, Some(&key), action);
+                }
+            },
+            event => event,
+        };
         match event {
             ViewEvent::Button(id) if id == "refresh" => state.refresh(&project, &root)?,
             ViewEvent::Button(id) => {
@@ -393,7 +422,7 @@ impl Views for Slate {
             _ => return Ok(()),
         }
         host::refresh_view(VIEW);
-        Ok(())
+        tree::publish(state, &root)
     }
 }
 
