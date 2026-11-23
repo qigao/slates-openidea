@@ -10,7 +10,6 @@ use manifests::{Presets, join, relative, slash};
 
 const VIEW: &str = "slate";
 const PROGRAM: &str = "slate";
-const RUN_CONFIGURATION: &str = "run-target";
 const PRESET_STORAGE: &str = "selected-presets";
 
 #[derive(Default)]
@@ -90,6 +89,15 @@ impl Action {
             Self::Build => "Build",
             Self::Run => "Run",
             Self::Test => "Test",
+        }
+    }
+
+    fn run_configuration(self) -> &'static str {
+        match self {
+            Self::Generate => "generate-project",
+            Self::Build => "build-target",
+            Self::Run => "run-target",
+            Self::Test => "test-target",
         }
     }
 
@@ -246,19 +254,15 @@ impl Workspace {
                 args.push("--tests".into());
             }
         }
-        if matches!(action, Action::Run) {
-            return host::start_run(RUN_CONFIGURATION, &args[1..], false)
-                .map(|_| ())
-                .map_err(|error| match error {
-                    Error::NotFound(message) if !path.is_empty() => Error::NotFound(format!(
-                        "{message}. Open {} directly to run it in the Run panel.",
-                        join(root, &path)
-                    )),
-                    error => error,
-                });
-        }
-        let name = target.map_or_else(|| display_root(root, &path), |target| target.name.as_str());
-        host::open_terminal(&format!("Slate {} {name}", action.label()), PROGRAM, &args)
+        host::start_run(action.run_configuration(), &args[1..], false)
+            .map(|_| ())
+            .map_err(|error| match error {
+                Error::NotFound(message) if !path.is_empty() => Error::NotFound(format!(
+                    "{message}. Open {} directly to use the Run panel.",
+                    join(root, &path)
+                )),
+                error => error,
+            })
     }
 }
 

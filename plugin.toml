@@ -1,6 +1,6 @@
 id = "qigao.slate"
 name = "Slate Build"
-version = "0.1.2"
+version = "0.1.3"
 description = "Browse Slate projects, select presets, and build, run, or test targets from the sidebar."
 authors = ["Qigao"]
 license = "Apache-2.0"
@@ -26,6 +26,27 @@ name = "Slate Run"
 files = ["slate.json", "apps/slate.json"]
 command = "slate"
 args = ["run"]
+
+[[contributes.runDetectors]]
+id = "generate-project"
+name = "Slate Generate"
+files = ["slate.json", "apps/slate.json"]
+command = "slate"
+args = ["gen"]
+
+[[contributes.runDetectors]]
+id = "build-target"
+name = "Slate Build"
+files = ["slate.json", "apps/slate.json"]
+command = "slate"
+args = ["build"]
+
+[[contributes.runDetectors]]
+id = "test-target"
+name = "Slate Test"
+files = ["slate.json", "apps/slate.json"]
+command = "slate"
+args = ["test"]
 
 [[contributes.commands]]
 id = "refresh"

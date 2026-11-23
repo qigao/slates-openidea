@@ -25,6 +25,18 @@ fn workspace() -> MockHost {
         "other/slate.json",
         r#"{"presets":{"debug":{"config":"debug"}}}"#,
     );
+    host.set_run_configurations(
+        [Action::Generate, Action::Build, Action::Run, Action::Test]
+            .into_iter()
+            .map(|action| PluginRunConfiguration {
+                id: action.run_configuration().into(),
+                name: format!("Slate {}", action.label()),
+                program: PROGRAM.into(),
+                args: vec![action.id().into()],
+                ..Default::default()
+            })
+            .collect(),
+    );
     host
 }
 
@@ -43,13 +55,6 @@ fn visible_rows(host: &MockHost) -> Vec<serde_json::Value> {
 #[test]
 fn groups_targets_keeps_project_presets_and_opens_source_files() {
     let host = workspace();
-    host.set_run_configurations(vec![PluginRunConfiguration {
-        id: RUN_CONFIGURATION.into(),
-        name: "Slate Run".into(),
-        program: PROGRAM.into(),
-        args: vec!["run".into()],
-        ..Default::default()
-    }]);
     host.on_process(PROGRAM, |args, _| {
         assert_eq!(args[0], "graph");
         assert_eq!(args[1..3], ["--root", "/project/app"]);
@@ -129,7 +134,7 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
     );
     let runs = host.configuration_runs();
     assert_eq!(runs.len(), 1);
-    assert_eq!(runs[0].1, RUN_CONFIGURATION);
+    assert_eq!(runs[0].1, Action::Run.run_configuration());
     assert!(!runs[0].3);
     assert_eq!(
         runs[0].2,
@@ -143,15 +148,19 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
             "--tests"
         ]
     );
-    assert!(host.terminals().is_empty());
     slate
         .run_command("build", &ctx, Some(&key("test", "app", "suite")))
         .unwrap();
-    assert_eq!(host.terminals()[0].args.last().unwrap(), "--tests");
+    send(
+        &mut slate,
+        &ctx,
+        serde_json::json!({
+            "action": "launch", "command": "test", "key": key("test", "app", "suite")
+        }),
+    );
     slate
-        .run_command("test", &ctx, Some(&key("test", "app", "suite")))
+        .handle(VIEW, ViewEvent::Button("gen".into()), &ctx)
         .unwrap();
-    assert_eq!(host.terminals()[1].args.last().unwrap(), "suite");
     assert!(
         slate
             .run_command("run", &ctx, Some(&key("target", "app", "math")))
@@ -164,9 +173,35 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
             "action": "launch", "command": "build", "key": key("run", "app", "hello")
         }),
     );
-    assert_eq!(host.terminals()[2].args.last().unwrap(), "--tests");
-    assert_eq!(host.terminals().len(), 3);
-    assert_eq!(host.configuration_runs().len(), 1);
+    let runs = host.configuration_runs();
+    assert_eq!(runs.len(), 5);
+    for (run, action, args) in [
+        (
+            &runs[1],
+            Action::Build,
+            ["--target", "suite", "--tests"].as_slice(),
+        ),
+        (&runs[2], Action::Test, ["--target", "suite"].as_slice()),
+        (
+            &runs[3],
+            Action::Generate,
+            ["--target", "hello", "--tests"].as_slice(),
+        ),
+        (
+            &runs[4],
+            Action::Build,
+            ["--target", "hello", "--tests"].as_slice(),
+        ),
+    ] {
+        assert_eq!(run.1, action.run_configuration());
+        assert_eq!(
+            &run.2[..4],
+            ["--root", "/project/app", "--preset", "release"]
+        );
+        assert_eq!(&run.2[4..], args);
+        assert!(!run.3);
+    }
+    assert!(host.terminals().is_empty());
 }
 
 #[test]
@@ -203,5 +238,10 @@ fn graph_without_test_dependencies_remains_browsable() {
     slate
         .run_command("build", &ctx, Some(&key("run", "app", "hello")))
         .unwrap();
-    assert!(!host.terminals()[0].args.iter().any(|arg| arg == "--tests"));
+    assert!(
+        !host.configuration_runs()[0]
+            .2
+            .iter()
+            .any(|arg| arg == "--tests")
+    );
 }
