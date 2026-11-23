@@ -1,0 +1,70 @@
+id = "qigao.slate"
+name = "Slate Build"
+version = "0.1.0"
+description = "Browse Slate projects, select presets, and build, run, or test targets from the sidebar."
+authors = ["Qigao"]
+license = "Apache-2.0"
+homepage = "https://github.com/qigao/slates-openidea"
+categories = ["tools"]
+icon = "slate.svg"
+engines.openidea = "^1.2"
+wasm = "dist/plugin.wasm"
+activation = ["on-view:slate", "on-command:*"]
+
+[capabilities]
+required = ["project.read", "storage", "process:slate"]
+
+[[contributes.views]]
+id = "slate"
+title = "Slate"
+icon = "slate.svg"
+location = "left"
+
+[[contributes.commands]]
+id = "refresh"
+title = "Slate: Refresh Projects"
+category = "Slate"
+
+[[contributes.commands]]
+id = "gen"
+title = "Slate: Generate"
+category = "Slate"
+
+[[contributes.commands]]
+id = "build"
+title = "Slate: Build"
+category = "Slate"
+
+[[contributes.commands]]
+id = "run"
+title = "Slate: Run"
+category = "Slate"
+
+[[contributes.commands]]
+id = "test"
+title = "Slate: Test"
+category = "Slate"
+
+[[contributes.menus]]
+menu = "viewItem.context"
+view = "slate"
+command = "gen"
+when = "viewItemKind == project"
+
+[[contributes.menus]]
+menu = "viewItem.context"
+view = "slate"
+command = "build"
+when = "viewItemKind == project || viewItemKind == target || viewItemKind == run || viewItemKind == test"
+
+[[contributes.menus]]
+menu = "viewItem.context"
+view = "slate"
+command = "run"
+when = "viewItemKind == run"
+
+[[contributes.menus]]
+menu = "viewItem.context"
+view = "slate"
+command = "test"
+when = "viewItemKind == project || viewItemKind == test"

@@ -1,0 +1,40 @@
+name: Plugin CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Test and compile WebAssembly
+        run: |
+          rustup target add wasm32-wasip2
+          cargo test --locked
+          cargo build --locked --release --target wasm32-wasip2
+          mkdir -p dist
+          cp target/wasm32-wasip2/release/slates_openidea.wasm dist/plugin.wasm
+      - name: Install OpenIDEA's plugin checker
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/l0ng-ai/openidea/releases/download/v0.1.38/openidea-plugin-linux-x86_64.gz \
+            --output "$RUNNER_TEMP/openidea-plugin.gz"
+          echo "035e22de24b9101651426f3a5626ec3cf938e321bf578aab7c83536fb67c089a  $RUNNER_TEMP/openidea-plugin.gz" | sha256sum --check
+          gzip --decompress "$RUNNER_TEMP/openidea-plugin.gz"
+          chmod +x "$RUNNER_TEMP/openidea-plugin"
+      - name: Validate and package
+        run: |
+          "$RUNNER_TEMP/openidea-plugin" pack . --out dist/qigao.slate-0.1.0.oiplugin
+          "$RUNNER_TEMP/openidea-plugin" check dist/qigao.slate-0.1.0.oiplugin
+      - uses: actions/upload-artifact@v6
+        with:
+          name: slate-openidea
+          path: dist/*.oiplugin
+          if-no-files-found: error

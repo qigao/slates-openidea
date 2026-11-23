@@ -1,0 +1,46 @@
+# Slate Build for OpenIDEA
+
+Manage [Slate](https://qigao.github.io/slates-build/) build projects from the
+Slate tool window in OpenIDEA's left sidebar. Open a workspace, then expand a
+project to load its targets from Slate.
+
+- The project tree discovers `slate.json` at the workspace root and in
+  subdirectories. Targets follow their module folders. Double-click a source
+  or header to open it.
+- Expand **Presets** and double-click a preset to select it. The selection
+  is saved per Slate project. **Project default** restores the manifest's
+  selection.
+- Use **Generate**, **Build**, **Run**, and **Test** from the toolbar or the
+  target context menu. Run is available for runnable executables. Slate
+  streams command output through OpenIDEA's Terminal tool window.
+
+## Install
+
+Use OpenIDEA 0.1.38 or a later release supporting plugin API 1.2, and Slate
+0.1.14 or later. Install the `.oiplugin` package from **Settings → Plugins →
+Install Plugin from Disk**. A package for each successful build is attached
+to the [repository's GitHub Actions runs](https://github.com/qigao/slates-openidea/actions).
+
+Approve the Slate executable when OpenIDEA asks for `process:slate`. Put the
+Slate bundle's `bin/` directory on `PATH`, or select the installed executable
+in the plugin's permission settings. Slate reads the project's `.env` and
+resolves toolchains as it does on the command line.
+
+The plugin reads project files to discover manifests and presets
+(`project.read`), saves the selected preset in its own storage (`storage`),
+and invokes the approved Slate binary to read graphs and launch commands
+(`process:slate`).
+
+## Develop
+
+Install a current Rust toolchain and the OpenIDEA plugin CLI. Then run:
+
+```sh
+rustup target add wasm32-wasip2
+cargo test --locked
+openidea-plugin build
+openidea-plugin pack . --out dist/qigao.slate-0.1.0.oiplugin
+```
+
+The SDK is pinned to OpenIDEA v0.1.38. The same WebAssembly component is used
+on Windows, Linux, and macOS.
