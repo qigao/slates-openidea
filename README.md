@@ -10,10 +10,10 @@ project to load its targets from Slate.
 - Expand **Presets** and click a preset to select it. The selection
   is saved per Slate project. **Project default** restores the manifest's
   selection.
-- Click the play icon to **Run** an executable or the hammer icon to
-  **Build** a project or target. Hover over an icon for its action and
-  target name. Test targets have a **Test** button. The toolbar also
-  offers **Generate** and acts on the current selection.
+- Click the play icon to **Run** an executable or **Test** a test target.
+  Click the hammer icon to **Build** a project or target. Hover over an
+  icon for its action and target name. The toolbar also offers **Generate**
+  and acts on the current selection.
 - Each action streams output to a named tab in OpenIDEA's **Run** tool
   window, with Stop and Rerun controls. The plugin supplies the selected
   project, preset, and target. Open a workspace containing `slate.json`
@@ -24,9 +24,9 @@ project to load its targets from Slate.
 ## Install
 
 Use OpenIDEA 0.1.46 or a later release supporting plugin API 1.9, and Slate
-0.1.14 or later. Install the `.oiplugin` package from **Settings → Plugins →
-Install Plugin from Disk**. A package for each successful build is attached
-to the [repository's GitHub Actions runs](https://github.com/qigao/slates-openidea/actions).
+0.1.14 or later. Download the `.oiplugin` package and install it from
+**Settings → Plugins → Install Plugin from Disk**.
+[Latest GitHub release](https://github.com/qigao/slates-openidea/releases/latest)
 
 Approve the Slate executable when OpenIDEA asks for `process:slate`. Put the
 Slate bundle's `bin/` directory on `PATH`, or select the installed executable
