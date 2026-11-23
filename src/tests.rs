@@ -269,3 +269,80 @@ fn launches_with_the_same_arguments_during_run_configuration_refresh() {
     assert_eq!(runs[0].1, CLI_CONFIGURATION);
     assert_eq!(runs[0].2, ["build", "--root", "/project/app"]);
 }
+
+#[test]
+fn restores_a_saved_preset_for_collapsed_projects_and_fresh_commands() {
+    let host = workspace();
+    host.on_process(PROGRAM, |_, _| {
+        Ok(ProcessOutput {
+            status: Some(0),
+            stdout: GRAPH.into(),
+            ..Default::default()
+        })
+    });
+    let ctx = host.invocation();
+    let project = key("project", "app", "");
+    let mut slate = Slate::default();
+    slate.render(VIEW, None, &ctx).unwrap();
+    slate
+        .handle(VIEW, ViewEvent::Expand(project.clone()), &ctx)
+        .unwrap();
+    slate
+        .handle(
+            VIEW,
+            ViewEvent::Activate(key("preset", "app", "release")),
+            &ctx,
+        )
+        .unwrap();
+    let graph_reads = host.process_runs().len();
+
+    let mut reopened = Slate::default();
+    reopened.render(VIEW, None, &ctx).unwrap();
+    send(
+        &mut reopened,
+        &ctx,
+        serde_json::json!({"action": "launch", "command": "build", "key": project}),
+    );
+    for action in [Action::Generate, Action::Test] {
+        let mut reopened = Slate::default();
+        reopened.render(VIEW, None, &ctx).unwrap();
+        reopened
+            .handle(VIEW, ViewEvent::Select(project.clone()), &ctx)
+            .unwrap();
+        reopened
+            .handle(VIEW, ViewEvent::Button(action.id().into()), &ctx)
+            .unwrap();
+    }
+    Slate::default()
+        .run_command("build", &ctx, Some(&project))
+        .unwrap();
+
+    let runs = host.configuration_runs();
+    assert_eq!(runs.len(), 4);
+    let actions = [Action::Build, Action::Generate, Action::Test, Action::Build];
+    for (run, action) in runs.iter().zip(actions) {
+        assert_eq!(run.1, action.run_configuration());
+        assert_eq!(run.2, ["--root", "/project/app", "--preset", "release"]);
+    }
+    assert_eq!(host.process_runs().len(), graph_reads);
+}
+
+#[test]
+fn validates_saved_presets_against_each_projects_manifest() {
+    let host = workspace();
+    host::storage::set(
+        PRESET_STORAGE,
+        r#"{"/project/app":"release","/project/other":"release"}"#,
+    )
+    .unwrap();
+    let ctx = host.invocation();
+    let mut slate = Slate::default();
+    for path in ["app", "other"] {
+        slate
+            .run_command("build", &ctx, Some(&key("project", path, "")))
+            .unwrap();
+    }
+    let runs = host.configuration_runs();
+    assert_eq!(runs[0].2, ["--root", "/project/app", "--preset", "release"]);
+    assert_eq!(runs[1].2, ["--root", "/project/other"]);
+}

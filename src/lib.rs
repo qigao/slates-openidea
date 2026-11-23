@@ -140,6 +140,7 @@ impl Workspace {
         if project.read_file("slate.json").is_ok() {
             manifests.push(join(root, "slate.json"));
         }
+        let mut choices = chosen_presets();
         let mut old = std::mem::take(&mut self.projects);
         for path in manifests {
             let path = slash(&path);
@@ -151,9 +152,16 @@ impl Workspace {
                         None => continue,
                     },
                 };
-                self.projects
-                    .entry(directory.into())
-                    .or_insert_with(|| old.remove(directory).unwrap_or_default());
+                self.projects.entry(directory.into()).or_insert_with(|| {
+                    if let Some(state) = old.remove(directory) {
+                        return state;
+                    }
+                    let mut state = SlateProject::default();
+                    if let Some(preset) = choices.remove(&join(root, directory)) {
+                        state.status = state.load_presets(project, directory, Some(preset)).err();
+                    }
+                    state
+                });
             }
         }
         self.scanned = true;
@@ -185,22 +193,14 @@ impl Workspace {
             return;
         };
         let absolute = join(root, path);
-        let manifest = join(path, "slate.json").trim_start_matches('/').to_owned();
         state.graph = None;
         state.graph_with_tests = false;
         state.status = None;
-        state.presets = match manifests::read(&manifest, |file| {
-            project.read_file(file).map_err(|error| error.to_string())
-        }) {
-            Ok(presets) => presets,
-            Err(error) => {
-                state.status = Some(error);
-                return;
-            }
-        };
-        state.selected_preset = chosen_presets()
-            .remove(&absolute)
-            .filter(|name| state.presets.names.contains_key(name));
+        let choice = chosen_presets().remove(&absolute);
+        if let Err(error) = state.load_presets(project, path, choice) {
+            state.status = Some(error);
+            return;
+        }
         let mut args = state.args("graph", &absolute);
         args.extend(["--format".into(), "json".into(), "--tests".into()]);
         match read_graph(project, &args) {
@@ -275,6 +275,30 @@ impl Workspace {
 }
 
 impl SlateProject {
+    fn load_presets(
+        &mut self,
+        project: &Project,
+        path: &str,
+        choice: Option<String>,
+    ) -> Result<(), String> {
+        let manifest = join(path, "slate.json");
+        let presets = manifests::read(&manifest, |file| {
+            project.read_file(file).map_err(|error| error.to_string())
+        });
+        match presets {
+            Ok(presets) => {
+                self.selected_preset = choice.filter(|name| presets.names.contains_key(name));
+                self.presets = presets;
+                Ok(())
+            }
+            Err(error) => {
+                self.selected_preset = None;
+                self.presets = Presets::default();
+                Err(error)
+            }
+        }
+    }
+
     fn args(&self, command: &str, root: &str) -> Vec<String> {
         let mut args = vec![command.into(), "--root".into(), root.into()];
         if let Some(preset) = self.selected_preset.as_ref() {

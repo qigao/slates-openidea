@@ -1,6 +1,6 @@
 id = "qigao.slate"
 name = "Slate Build"
-version = "0.1.6"
+version = "0.1.7"
 description = "Browse Slate projects, select presets, and build, run, or test targets from the sidebar."
 authors = ["Qigao"]
 license = "Apache-2.0"
