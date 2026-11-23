@@ -11,8 +11,20 @@ const GRAPH: &str = r#"{
   ]
 }"#;
 
-fn workspace() -> MockHost {
+fn configured_host() -> MockHost {
     let host = MockHost::install().with_capabilities(&["project.read", "storage", "process:slate"]);
+    host.set_run_configurations(
+        Slate::default()
+            .launch_configurations("/project")
+            .into_iter()
+            .map(|launch| launch.config)
+            .collect(),
+    );
+    host
+}
+
+fn workspace() -> MockHost {
+    let host = configured_host();
     host.add_file(
         "app/slate.json",
         r#"{"include":["presets.json"],"defaultPreset":"debug"}"#,
@@ -24,13 +36,6 @@ fn workspace() -> MockHost {
     host.add_file(
         "other/slate.json",
         r#"{"presets":{"debug":{"config":"debug"}}}"#,
-    );
-    host.set_run_configurations(
-        Slate::default()
-            .launch_configurations("/project")
-            .into_iter()
-            .map(|launch| launch.config)
-            .collect(),
     );
     host
 }
@@ -272,8 +277,26 @@ fn launches_with_the_same_arguments_during_run_configuration_refresh() {
 
 #[test]
 fn restores_a_saved_preset_for_collapsed_projects_and_fresh_commands() {
-    let host = workspace();
-    host.on_process(PROGRAM, |_, _| {
+    check_preset_reopen(&workspace(), "app", "/project/app");
+}
+
+#[test]
+fn loads_the_workspace_root_manifest_and_restores_its_saved_preset() {
+    let host = configured_host();
+    host.add_file(
+        "slate.json",
+        r#"{"include":["presets/build.json"],"defaultPreset":"debug"}"#,
+    );
+    host.add_file(
+        "presets/build.json",
+        r#"{"presets":{"debug":{"config":"debug"},"release":{"config":"release"}}}"#,
+    );
+    check_preset_reopen(&host, "", "/project");
+}
+
+fn check_preset_reopen(host: &MockHost, path: &str, root: &'static str) {
+    host.on_process(PROGRAM, move |args, _| {
+        assert_eq!(args[..3], ["graph", "--root", root]);
         Ok(ProcessOutput {
             status: Some(0),
             stdout: GRAPH.into(),
@@ -281,20 +304,26 @@ fn restores_a_saved_preset_for_collapsed_projects_and_fresh_commands() {
         })
     });
     let ctx = host.invocation();
-    let project = key("project", "app", "");
+    let project = key("project", path, "");
     let mut slate = Slate::default();
     slate.render(VIEW, None, &ctx).unwrap();
+    send(&mut slate, &ctx, serde_json::json!({"action": "ready"}));
+    assert!(visible_rows(host).iter().any(|row| row["key"] == project));
     slate
         .handle(VIEW, ViewEvent::Expand(project.clone()), &ctx)
         .unwrap();
+    let rows = visible_rows(host);
+    assert!(rows.iter().any(|row| row["label"] == "Presets"));
+    assert!(rows.iter().any(|row| row["label"] == "Targets"));
     slate
         .handle(
             VIEW,
-            ViewEvent::Activate(key("preset", "app", "release")),
+            ViewEvent::Activate(key("preset", path, "release")),
             &ctx,
         )
         .unwrap();
     let graph_reads = host.process_runs().len();
+    assert_eq!(graph_reads, 2);
 
     let mut reopened = Slate::default();
     reopened.render(VIEW, None, &ctx).unwrap();
@@ -322,7 +351,7 @@ fn restores_a_saved_preset_for_collapsed_projects_and_fresh_commands() {
     let actions = [Action::Build, Action::Generate, Action::Test, Action::Build];
     for (run, action) in runs.iter().zip(actions) {
         assert_eq!(run.1, action.run_configuration());
-        assert_eq!(run.2, ["--root", "/project/app", "--preset", "release"]);
+        assert_eq!(run.2, ["--root", root, "--preset", "release"]);
     }
     assert_eq!(host.process_runs().len(), graph_reads);
 }

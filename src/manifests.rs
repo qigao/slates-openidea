@@ -41,10 +41,10 @@ pub fn relative<'a>(root: &str, path: &'a str) -> Option<&'a str> {
 }
 
 pub fn join(root: &str, path: &str) -> String {
-    if path.is_empty() {
-        root.to_owned()
-    } else {
-        format!("{}/{path}", root.trim_end_matches('/'))
+    match (root, path) {
+        ("", path) => path.to_owned(),
+        (root, "") => root.to_owned(),
+        (root, path) => format!("{}/{path}", root.trim_end_matches('/')),
     }
 }
 
