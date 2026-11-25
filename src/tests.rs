@@ -53,6 +53,113 @@ fn visible_rows(host: &MockHost) -> Vec<serde_json::Value> {
 }
 
 #[test]
+fn shares_library_manifests_and_runs_nested_projects_with_arguments() {
+    let host = MockHost::install().with_capabilities(&["project.read", "storage", "process:slate"]);
+    for path in ["apps/fetch", "apps/health-check"] {
+        host.add_file(
+            &join(path, "slate.json"),
+            r#"{"libraries":["../../libs/http.json"],"presets":{"debug":{"config":"debug"}}}"#,
+        );
+    }
+    host.add_file("libs/http.json", "{}");
+    host.add_file(
+        "apps/fetch/slate.run.json",
+        r#"{"hello":["tcp://127.0.0.1:8000","127.0.0.1:8000","/hello.c",]}"#,
+    );
+    host.on_process(PROGRAM, |args, _| {
+        assert!(matches!(args[2].as_str(), "/project/apps/fetch" | "/project/apps/health-check"));
+        Ok(ProcessOutput {
+            status: Some(0),
+            stdout: r#"{
+              "preset":"debug", "platform":"windows-x64", "compiler":"clang",
+              "targets":[
+                {"name":"hello","folder":"","kind":"exec","runnable":true,"test":false},
+                {"name":"chttp_client","folder":"external","kind":"prebuilt","runnable":false,"test":false,
+                 "manifest":"/project/libs/http.json"}
+              ]
+            }"#.into(),
+            stderr: String::new(),
+            ..Default::default()
+        })
+    });
+    let ctx = host.invocation();
+    let mut slate = Slate::default();
+    slate.render(VIEW, None, &ctx).unwrap();
+    for path in ["apps/fetch", "apps/health-check"] {
+        slate
+            .handle(VIEW, ViewEvent::Expand(key("project", path, "")), &ctx)
+            .unwrap();
+    }
+    let before = host.process_runs().len();
+    slate
+        .handle(VIEW, ViewEvent::Button("refresh".into()), &ctx)
+        .unwrap();
+    assert_eq!(host.process_runs().len() - before, 2);
+
+    let path = "apps/fetch";
+    slate
+        .handle(VIEW, ViewEvent::Expand(key("targets", path, "")), &ctx)
+        .unwrap();
+    let rows = visible_rows(&host);
+    let external = rows.iter().find(|row| row["label"] == "external").unwrap();
+    send(
+        &mut slate,
+        &ctx,
+        serde_json::json!({"action":"toggle","key":external["key"],"expanded":true}),
+    );
+    slate
+        .handle(
+            VIEW,
+            ViewEvent::Expand(key("target", path, "chttp_client")),
+            &ctx,
+        )
+        .unwrap();
+    let rows = visible_rows(&host);
+    let manifest = rows.iter().find(|row| row["label"] == "http.json").unwrap();
+    send(
+        &mut slate,
+        &ctx,
+        serde_json::json!({"action":"activate","key":manifest["key"]}),
+    );
+    assert_eq!(host.opened_locations()[0].0, "/project/libs/http.json");
+
+    slate
+        .run_command("run", &ctx, Some(&key("run", path, "hello")))
+        .unwrap();
+    slate
+        .run_command("run", &ctx, Some(&key("run", "apps/health-check", "hello")))
+        .unwrap();
+    let terminals = host.terminals();
+    assert!(host.configuration_runs().is_empty());
+    assert_eq!(
+        terminals[0].args,
+        [
+            "run",
+            "--root",
+            "/project/apps/fetch",
+            "--target",
+            "hello",
+            "--tests",
+            "--",
+            "tcp://127.0.0.1:8000",
+            "127.0.0.1:8000",
+            "/hello.c",
+        ]
+    );
+    assert_eq!(
+        terminals[1].args,
+        [
+            "run",
+            "--root",
+            "/project/apps/health-check",
+            "--target",
+            "hello",
+            "--tests"
+        ]
+    );
+}
+
+#[test]
 fn groups_targets_keeps_project_presets_and_opens_source_files() {
     let host = workspace();
     host.on_process(PROGRAM, |args, _| {

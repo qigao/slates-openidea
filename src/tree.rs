@@ -111,6 +111,7 @@ fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
                 .sources
                 .iter()
                 .chain(&target.headers)
+                .chain(&target.manifest)
                 .map(|file| slash(file))
                 .filter(|file| relative(root, file).is_some())
                 .collect();
@@ -126,7 +127,12 @@ fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
                 row = row.expandable(workspace.expanded.contains(&target_key));
             }
             rows.push(row);
-            let module_root = join(&project_root, &target.folder);
+            let module_root = target
+                .manifest
+                .as_deref()
+                .map(slash)
+                .and_then(|manifest| manifest.rsplit_once('/').map(|(dir, _)| dir.to_owned()))
+                .unwrap_or_else(|| join(&project_root, &target.folder));
             for file in files {
                 let label = relative(&module_root, &file)
                     .or_else(|| relative(&project_root, &file))

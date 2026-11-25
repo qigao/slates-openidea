@@ -50,6 +50,7 @@ struct Graph {
 struct Target {
     name: String,
     folder: String,
+    manifest: Option<String>,
     kind: String,
     runnable: bool,
     test: bool,
@@ -232,20 +233,32 @@ impl Workspace {
         let path = active.or_else(|| {
             (self.projects.len() == 1).then(|| self.projects.keys().next().unwrap().clone())
         });
-        if let Some(path) = path {
-            let project_key = key("project", &path, "");
+        let active_key = path.as_ref().map(|path| key("project", path, ""));
+        if let Some(project_key) = &active_key {
             self.expanded.insert(project_key.clone());
+        }
+        let expanded: Vec<_> = self
+            .projects
+            .keys()
+            .filter(|path| self.expanded.contains(&key("project", path, "")))
+            .cloned()
+            .collect();
+        for path in expanded {
             self.reload(project, root, &path);
-            if self.selection(None).is_none() || self.selected.is_none() {
-                self.selected = Some(project_key);
-            }
-        } else {
-            self.selected = None;
+        }
+        if self.selection(None).is_none() || self.selected.is_none() {
+            self.selected = active_key;
         }
         Ok(())
     }
 
-    fn launch(&self, root: &str, item: Option<&str>, action: Action) -> Result<(), Error> {
+    fn launch(
+        &self,
+        workspace: &Project,
+        root: &str,
+        item: Option<&str>,
+        action: Action,
+    ) -> Result<(), Error> {
         let (path, target) = self
             .selection(item)
             .ok_or("Select a Slate project or target")?;
@@ -259,19 +272,44 @@ impl Workspace {
             if project.graph_with_tests && !matches!(action, Action::Test) {
                 args.push("--tests".into());
             }
+            if matches!(action, Action::Run) {
+                let run_args = run_arguments(workspace, &path, &target.name)?;
+                if !run_args.is_empty() {
+                    args.push("--".into());
+                    args.extend(run_args);
+                }
+            }
         }
         let run = match host::start_run(action.run_configuration(), &args[1..], false) {
             Err(Error::NotFound(_)) => host::start_run(CLI_CONFIGURATION, &args, false),
             result => result,
         };
-        run.map(|_| ()).map_err(|error| match error {
-            Error::NotFound(message) if !path.is_empty() => Error::NotFound(format!(
-                "{message}. Open {} directly to use the Run panel.",
-                join(root, &path)
-            )),
-            error => error,
-        })
+        match run {
+            Ok(_) => Ok(()),
+            // OpenIDEA's configuration markers are exact paths relative to the workspace.
+            Err(Error::NotFound(_)) => host::open_terminal(
+                &format!("Slate {} · {}", action.label(), display_root(root, &path)),
+                PROGRAM,
+                &args,
+            ),
+            Err(error) => Err(error),
+        }
     }
+}
+
+fn run_arguments(project: &Project, path: &str, target: &str) -> Result<Vec<String>, Error> {
+    let file = join(path, "slate.run.json");
+    let text = match project.read_file(&file) {
+        Ok(text) => text,
+        Err(Error::NotFound(_)) => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let mut targets: BTreeMap<String, Vec<String>> = jsonc_parser::parse_to_serde_value(
+        text.trim_start_matches('\u{feff}'),
+        &Default::default(),
+    )
+    .map_err(|error| Error::Invalid(format!("{file}: {error}")))?;
+    Ok(targets.remove(target).unwrap_or_default())
 }
 
 impl SlateProject {
@@ -360,7 +398,7 @@ impl Plugin for Slate {
             if !state.scanned {
                 state.scan(&project, &root)?;
             }
-            state.launch(&root, arg, action)?;
+            state.launch(&project, &root, arg, action)?;
         }
         Ok(None)
     }
@@ -419,7 +457,7 @@ impl Views for Slate {
                 tree::Message::Activate { key } => ViewEvent::Activate(key),
                 tree::Message::Launch { command, key } => {
                     let action = Action::from_id(&command).ok_or("Unknown Slate action")?;
-                    return state.launch(&root, Some(&key), action);
+                    return state.launch(&project, &root, Some(&key), action);
                 }
             },
             event => event,
@@ -428,7 +466,7 @@ impl Views for Slate {
             ViewEvent::Button(id) if id == "refresh" => state.refresh(&project, &root)?,
             ViewEvent::Button(id) => {
                 if let Some(action) = Action::from_id(&id) {
-                    state.launch(&root, None, action)?;
+                    state.launch(&project, &root, None, action)?;
                 }
                 return Ok(());
             }
