@@ -53,6 +53,102 @@ fn visible_rows(host: &MockHost) -> Vec<serde_json::Value> {
 }
 
 #[test]
+fn nests_projects_under_directories_and_keeps_root_targets_separate() {
+    let host = configured_host();
+    for path in [
+        "",
+        "apps/client",
+        "apps/client/examples/demo",
+        "apps/server",
+    ] {
+        host.add_file(&join(path, "slate.json"), "{}");
+    }
+    host.on_process(PROGRAM, |_, _| {
+        Ok(ProcessOutput {
+            status: Some(0),
+            stdout: GRAPH.into(),
+            ..Default::default()
+        })
+    });
+    let ctx = host.invocation();
+    let mut slate = Slate::default();
+    slate.render(VIEW, None, &ctx).unwrap();
+    send(&mut slate, &ctx, serde_json::json!({"action": "ready"}));
+    let root_key = key("project", "", "");
+    let rows = visible_rows(&host);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["key"], root_key);
+    assert!(host.process_runs().is_empty());
+
+    slate
+        .handle(VIEW, ViewEvent::Expand(root_key.clone()), &ctx)
+        .unwrap();
+    let apps_key = key("directory", "", "apps");
+    let rows = visible_rows(&host);
+    let apps = rows.iter().find(|row| row["key"] == apps_key).unwrap();
+    assert_eq!(apps["parent"], root_key);
+    assert!(rows.iter().any(|row| row["key"] == key("targets", "", "")));
+    slate
+        .handle(VIEW, ViewEvent::Expand(apps_key.clone()), &ctx)
+        .unwrap();
+    let rows = visible_rows(&host);
+    let client_key = key("project", "apps/client", "");
+    let client = rows.iter().find(|row| row["key"] == client_key).unwrap();
+    assert_eq!(client["label"], "client");
+    assert_eq!(client["parent"], apps_key);
+    assert_eq!(rows.iter().filter(|row| row["key"] == apps_key).count(), 1);
+    assert_eq!(host.process_runs().len(), 1);
+
+    slate
+        .handle(VIEW, ViewEvent::Select(apps_key.clone()), &ctx)
+        .unwrap();
+    assert!(slate.workspaces["/project"].selection(None).is_none());
+    let view = slate.render(VIEW, None, &ctx).unwrap();
+    assert!(
+        view.toolbar
+            .iter()
+            .filter(|button| button.id != "refresh")
+            .all(|button| !button.enabled)
+    );
+
+    slate
+        .handle(VIEW, ViewEvent::Expand(client_key.clone()), &ctx)
+        .unwrap();
+    let examples_key = key("directory", "", "apps/client/examples");
+    let rows = visible_rows(&host);
+    let examples = rows.iter().find(|row| row["key"] == examples_key).unwrap();
+    assert_eq!(examples["parent"], client_key);
+    slate
+        .handle(VIEW, ViewEvent::Expand(examples_key.clone()), &ctx)
+        .unwrap();
+    let rows = visible_rows(&host);
+    let demo_key = key("project", "apps/client/examples/demo", "");
+    let demo = rows.iter().find(|row| row["key"] == demo_key).unwrap();
+    assert_eq!(demo["label"], "demo");
+    assert_eq!(demo["parent"], examples_key);
+    slate.run_command("build", &ctx, Some(&demo_key)).unwrap();
+    assert_eq!(
+        host.configuration_runs().last().unwrap().2,
+        ["--root", "/project/apps/client/examples/demo"]
+    );
+
+    slate
+        .handle(VIEW, ViewEvent::Button("refresh".into()), &ctx)
+        .unwrap();
+    let rows = visible_rows(&host);
+    assert!(rows.iter().any(|row| row["key"] == demo_key));
+    assert_eq!(rows.iter().filter(|row| row["key"] == apps_key).count(), 1);
+    slate
+        .handle(VIEW, ViewEvent::Collapse(apps_key), &ctx)
+        .unwrap();
+    assert!(
+        !visible_rows(&host)
+            .iter()
+            .any(|row| row["key"] == client_key)
+    );
+}
+
+#[test]
 fn shares_library_manifests_and_runs_nested_projects_with_arguments() {
     let host = MockHost::install().with_capabilities(&["project.read", "storage", "process:slate"]);
     for path in ["apps/fetch", "apps/health-check"] {
@@ -85,6 +181,9 @@ fn shares_library_manifests_and_runs_nested_projects_with_arguments() {
     let ctx = host.invocation();
     let mut slate = Slate::default();
     slate.render(VIEW, None, &ctx).unwrap();
+    slate
+        .handle(VIEW, ViewEvent::Expand(key("directory", "", "apps")), &ctx)
+        .unwrap();
     for path in ["apps/fetch", "apps/health-check"] {
         slate
             .handle(VIEW, ViewEvent::Expand(key("project", path, "")), &ctx)
@@ -186,9 +285,20 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
     );
     assert!(host.process_runs().is_empty());
 
-    slate
-        .handle(VIEW, ViewEvent::Expand(key("project", "app", "")), &ctx)
+    send(
+        &mut slate,
+        &ctx,
+        serde_json::json!({"action": "presets", "key": key("project", "app", "")}),
+    );
+    let rows = visible_rows(&host);
+    let default = rows
+        .iter()
+        .find(|row| row["label"] == "Project default")
         .unwrap();
+    assert_eq!(default["icon"], "check");
+    let presets = rows.iter().find(|row| row["label"] == "Presets").unwrap();
+    assert_eq!(presets["expanded"], true);
+    assert_eq!(presets["icon"], "list-selection");
     slate
         .handle(
             VIEW,
@@ -197,6 +307,10 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
         )
         .unwrap();
     assert_eq!(chosen_presets()["/project/app"], "release");
+    let rows = visible_rows(&host);
+    let release = rows.iter().find(|row| row["label"] == "release").unwrap();
+    assert_eq!(release["detail"], "Active");
+    assert_eq!(release["icon"], "check");
     for label in ["Targets", "examples", "hello", "hello", "src"] {
         let rows = visible_rows(&host);
         let item = rows
@@ -212,6 +326,12 @@ fn groups_targets_keeps_project_presets_and_opens_source_files() {
     let rows = visible_rows(&host);
     assert!(rows.iter().any(|item| item["label"] == "include"));
     let source = rows.iter().find(|item| item["label"] == "main.c").unwrap();
+    assert_eq!(source["icon"], "file");
+    let executable = rows
+        .iter()
+        .find(|item| item["key"] == key("run", "app", "hello"))
+        .unwrap();
+    assert_eq!(executable["icon"], "file-code");
     send(
         &mut slate,
         &ctx,

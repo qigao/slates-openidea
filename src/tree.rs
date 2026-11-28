@@ -8,6 +8,7 @@ pub enum Message {
     Select { key: String },
     Activate { key: String },
     Launch { command: String, key: String },
+    Presets { key: String },
 }
 
 #[derive(Serialize)]
@@ -19,12 +20,14 @@ struct Row<'a> {
     expandable: bool,
     expanded: bool,
     kind: &'a str,
+    icon: &'a str,
 }
 
 fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
     let mut rows = Vec::new();
     let mut folders = BTreeSet::new();
     for (path, project) in &workspace.projects {
+        let parent = project_parent(&mut rows, &mut folders, workspace, path);
         let project_key = key("project", path, "");
         let project_root = join(root, path);
         let preset = project
@@ -36,26 +39,33 @@ fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
             || preset.to_owned(),
             |graph| format!("{} · {} · {}", graph.preset, graph.platform, graph.compiler),
         );
-        rows.push(
-            TreeItem::new(&project_key, display_root(root, path))
-                .icon("folder")
-                .detail(&detail)
-                .expandable(workspace.expanded.contains(&project_key)),
-        );
+        let label = if path.is_empty() {
+            display_root(root, path)
+        } else {
+            path.rsplit('/').next().unwrap_or(path)
+        };
+        let mut row = TreeItem::new(&project_key, label)
+            .icon("folder")
+            .detail(&detail)
+            .expandable(workspace.expanded.contains(&project_key));
+        if let Some(parent) = parent {
+            row = row.parent(&parent);
+        }
+        rows.push(row);
 
         if !project.presets.names.is_empty() {
             let presets_key = key("presets", path, "");
             rows.push(
                 TreeItem::new(&presets_key, "Presets")
                     .parent(&project_key)
-                    .icon("settings")
+                    .icon("list-selection")
                     .expandable(workspace.expanded.contains(&presets_key)),
             );
             let current = project.selected_preset.as_deref();
             let default =
                 TreeItem::new(&key("preset", path, ""), "Project default").parent(&presets_key);
             rows.push(if current.is_none() {
-                default.detail("Active")
+                default.detail("Active").icon("check")
             } else {
                 default
             });
@@ -68,6 +78,11 @@ fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
                 rows.push(
                     TreeItem::new(&key("preset", path, name), name)
                         .parent(&presets_key)
+                        .icon(if current == Some(name.as_str()) {
+                            "check"
+                        } else {
+                            "gear"
+                        })
                         .detail(detail),
                 );
             }
@@ -77,6 +92,7 @@ fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
             rows.push(
                 TreeItem::new(&key("status", path, ""), "Slate graph")
                     .parent(&project_key)
+                    .icon("error")
                     .detail(status),
             );
         }
@@ -118,10 +134,12 @@ fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
             let mut row = TreeItem::new(&target_key, &target.name)
                 .parent(&parent)
                 .detail(&target.kind)
-                .icon(if target.test || target.runnable {
-                    "run"
+                .icon(if target.test {
+                    "beaker"
+                } else if target.runnable {
+                    "file-code"
                 } else {
-                    "file"
+                    "package"
                 });
             if !files.is_empty() {
                 row = row.expandable(workspace.expanded.contains(&target_key));
@@ -163,6 +181,42 @@ fn rows(workspace: &Workspace, root: &str) -> Vec<TreeItem> {
     rows
 }
 
+fn project_parent(
+    rows: &mut Vec<TreeItem>,
+    folders: &mut BTreeSet<String>,
+    workspace: &Workspace,
+    path: &str,
+) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+    let mut parent = workspace
+        .projects
+        .contains_key("")
+        .then(|| key("project", "", ""));
+    let mut prefix = String::new();
+    let (directory, _) = path.rsplit_once('/').unwrap_or(("", path));
+    for part in directory.split('/').filter(|part| !part.is_empty()) {
+        prefix = join(&prefix, part);
+        if workspace.projects.contains_key(&prefix) {
+            parent = Some(key("project", &prefix, ""));
+            continue;
+        }
+        let folder = key("directory", "", &prefix);
+        if folders.insert(folder.clone()) {
+            let mut row = TreeItem::new(&folder, part)
+                .icon("folder")
+                .expandable(workspace.expanded.contains(&folder));
+            if let Some(parent) = &parent {
+                row = row.parent(parent);
+            }
+            rows.push(row);
+        }
+        parent = Some(folder);
+    }
+    parent
+}
+
 pub fn publish(workspace: &Workspace, root: &str) -> Result<(), Error> {
     let items = rows(workspace, root);
     let mut expanded = BTreeSet::new();
@@ -185,6 +239,7 @@ pub fn publish(workspace: &Workspace, root: &str) -> Result<(), Error> {
                 expandable: item.expandable,
                 expanded: item.expanded,
                 kind,
+                icon: item.icon.as_deref().unwrap_or("gear"),
             })
         })
         .collect();
@@ -205,7 +260,9 @@ pub fn render(workspace: &Workspace, root: &str) -> View {
     } else {
         let root = serde_json::json!(root).to_string().replace('<', "\\u003c");
         View::new(Body::Html(
-            include_str!("tree.html").replace("/*WORKSPACE*/null", &root),
+            include_str!("tree.html")
+                .replace("/*WORKSPACE*/null", &root)
+                .replace("/*ICONS*/{}", include_str!("icons.json")),
         ))
     };
     view.toolbar

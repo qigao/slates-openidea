@@ -1,31 +1,43 @@
+<!-- Codicons: copyright Microsoft Corporation and contributors, CC BY 4.0.
+     https://github.com/microsoft/vscode-codicons
+     https://creativecommons.org/licenses/by/4.0/
+     SVG geometry unchanged; embedded locally with accessibility attributes. -->
 <style>
-  body { margin: 2px 4px; }
+  body { margin: 2px 4px; color: var(--openidea-fg); font-family: var(--openidea-font-ui, system-ui, sans-serif); font-size: var(--openidea-font-size, 13px); }
   ul { margin: 0; padding: 0; list-style: none; }
-  ul ul { padding-inline-start: 0.85em; }
-  .row { display: flex; align-items: center; min-width: 0; border-radius: 4px; }
+  ul ul { padding-inline-start: 12px; }
+  .row { display: flex; align-items: center; min-width: 0; min-height: 24px; border-radius: 4px; }
   .row:hover { background: var(--openidea-bg-hover); }
-  .row[data-current] { background: var(--openidea-bg-selected); }
-  button { min-height: 26px; border: 0; border-radius: 4px; padding: 2px 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .row[data-current] { background: var(--openidea-bg-selected); color: var(--openidea-fg-strong, var(--openidea-fg)); }
+  button { min-height: 24px; border: 0; border-radius: 4px; padding: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
   button:hover { background: var(--openidea-bg-hover); }
   button:focus-visible { outline: 2px solid var(--openidea-focus-ring, Highlight); outline-offset: -2px; }
-  .toggle, .spacer, .build, .play { flex: 0 0 26px; }
-  .label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: start; }
-  .label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .label > span:first-child { min-width: min(10ch, 60%); }
-  .detail { color: var(--openidea-fg-muted); }
-  .build, .play { display: grid; place-items: center; }
-  .play { color: var(--openidea-success, #278553); }
-  .build::before, .play::before { content: ""; display: block; background: currentColor; }
-  .build::before { width: 14px; height: 14px; clip-path: polygon(5% 5%, 88% 5%, 98% 32%, 59% 32%, 59% 100%, 37% 100%, 37% 32%, 5% 32%); transform: rotate(38deg); }
-  .play::before { width: 11px; height: 12px; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+  .toggle, .spacer { flex: 0 0 24px; }
+  .toggle, .action { display: grid; place-items: center; }
+  .icon { display: inline-flex; flex: 0 0 16px; width: 16px; height: 16px; }
+  .icon svg { display: block; width: 16px; height: 16px; }
+  .label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: start; padding-inline-end: 4px; }
+  .name, .detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name { min-width: 0; flex: 0 1 auto; }
+  .label.with-detail .name { flex-shrink: 0; max-width: 60%; }
+  .detail { min-width: 0; flex: 0 1 auto; color: var(--openidea-fg-muted); }
+  .actions { display: flex; flex-shrink: 0; opacity: 0; pointer-events: none; }
+  .action { width: 24px; }
+  .row:hover .actions, .row:focus-within .actions, .row[data-current] .actions { opacity: 1; pointer-events: auto; }
+  @media (hover: none) { .actions { opacity: 1; pointer-events: auto; } }
   @media (forced-colors: active) {
-    .build::before, .play::before { forced-color-adjust: none; background: ButtonText; }
+    .row[data-current] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+    .row[data-current] .detail { color: inherit; }
+    .row[data-current] button:hover { background: Highlight; }
+    button:focus-visible { outline-color: Highlight; }
+    .row[data-current] button:focus-visible { outline-color: HighlightText; }
   }
 </style>
 <ul id="projects" aria-label="Slate projects" role="list"></ul>
 <p id="loading" role="status">Loading Slate projects…</p>
 <script>
   const workspace = /*WORKSPACE*/null;
+  const icons = /*ICONS*/{};
   const tree = document.getElementById("projects");
   const loading = document.getElementById("loading");
   const send = (action, data = {}) => openidea.postMessage(JSON.stringify({ action, ...data }));
@@ -33,6 +45,14 @@
     const element = document.createElement(tag);
     element.className = className;
     if (text !== undefined) element.textContent = text;
+    return element;
+  };
+  const icon = (name) => {
+    const element = make("span", "icon");
+    element.setAttribute("aria-hidden", "true");
+    // Only bundled SVGs enter innerHTML. Project labels stay in textContent.
+    element.innerHTML = icons[name] ?? icons.file;
+    element.firstElementChild?.setAttribute("focusable", "false");
     return element;
   };
 
@@ -61,31 +81,49 @@
       };
       const toggle = () => send("toggle", { key: item.key, expanded: !item.expanded });
       if (item.expandable) {
-        control("toggle", (item.expanded ? "Collapse " : "Expand ") + item.label,
-          item.expanded ? "▾" : "▸", toggle).setAttribute("aria-expanded", item.expanded);
+        const button = control("toggle", (item.expanded ? "Collapse " : "Expand ") + item.label,
+          undefined, toggle);
+        button.setAttribute("aria-expanded", item.expanded);
+        button.append(icon(item.expanded ? "chevron-down" : "chevron-right"));
       } else {
         row.append(make("span", "spacer"));
       }
       const activate = item.kind === "preset" || item.kind === "file";
       const label = control("label", item.label, undefined, () => {
-        if (item.expandable && (["folder", "presets", "targets"].includes(item.kind)
+        if (item.expandable && (["directory", "folder", "presets", "targets"].includes(item.kind)
           || (item.kind === "project" && !item.expanded))) toggle();
         else send(activate ? "activate" : "select", { key: item.key });
       });
-      label.append(make("span", "", item.label));
-      if (item.detail) label.append(make("span", "detail", item.detail));
+      label.append(icon(item.icon), make("span", "name", item.label));
+      if (item.detail) {
+        label.classList.add("with-detail");
+        label.append(make("span", "detail", item.detail));
+      }
       if (item.key === selected) label.setAttribute("aria-current", "true");
 
       const launch = (command) => () => send("launch", { command, key: item.key });
-      if (["project", "target", "run", "test"].includes(item.kind)) {
-        control("build", "Build " + item.label, undefined, launch("build"));
+      const actions = make("span", "actions");
+      const action = (name, label, glyph, click) => {
+        const button = control(name, label, undefined, click);
+        button.className = "action";
+        button.append(icon(glyph));
+        actions.append(button);
+      };
+      if (item.kind === "project") {
+        action("generate", "Generate Ninja files for " + item.label, "gear", launch("gen"));
+        action("presets", "Select preset for " + item.label, "list-selection",
+          () => send("presets", { key: item.key }));
+      }
+      if (["target", "run", "test"].includes(item.kind)) {
+        action("build", "Build " + item.label, "tools", launch("build"));
       }
       if (item.kind === "run") {
-        control("play", "Run " + item.label, undefined, launch("run"));
+        action("play", "Run " + item.label, "play", launch("run"));
       }
       if (item.kind === "test") {
-        control("play", "Test " + item.label, undefined, launch("test"));
+        action("test", "Test " + item.label, "beaker", launch("test"));
       }
+      row.append(actions);
       entry.append(row);
       if (item.expanded) {
         const subtree = document.createElement("ul");

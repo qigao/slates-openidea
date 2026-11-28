@@ -1,45 +1,47 @@
 # Slate Build for OpenIDEA
 
-Manage [Slate](https://qigao.github.io/slates-build/) build projects from the
-Slate tool window in OpenIDEA's left sidebar. Open a workspace, then expand a
-project to load its targets from Slate.
+Browse, build, test, and run Slate targets from OpenIDEA's left sidebar.
 
-- The project tree discovers `slate.json` at the workspace root and in
-  subdirectories. Each project keeps its own preset and target selection.
-  Targets follow their module folders, with shared libraries outside the
-  project root under `external`. Open a target's source, header, or manifest
-  from its tree. **Refresh** reloads all expanded projects after shared
-  manifests change.
-- Expand **Presets** and click a preset to select it. The selection
-  is saved per Slate project. **Project default** restores the manifest's
-  selection.
-- Click the play icon to **Run** an executable or **Test** a test target.
-  Click the hammer icon to **Build** a project or target. Hover over an
-  icon for its action and target name. The toolbar also offers **Generate**
-  and acts on the current selection.
-- Actions use the selected project, preset, and target. In workspaces with
-  `slate.json` or `apps/slate.json`, the plugin uses OpenIDEA's **Run** panel.
-  Workspaces with Slate projects in other locations use a named terminal
-  when the Run configuration is unavailable.
-- Run-panel launches enable Slate's ANSI status colors. Slate honors
-  `NO_COLOR`, and the Run panel also renders ANSI output from child tools.
+## Quick start
 
-## Install
+1. In OpenIDEA, open **Settings → Plugins → Available** and install **Slate Build**.
+   For a manual install, download the [`.oiplugin` package](https://github.com/qigao/slates-openidea/releases/latest)
+   and select **Settings → Plugins → Install Plugin from Disk**.
+2. Install [the Slate CLI](https://qigao.github.io/slates-build/), Ninja, and
+   your project's compiler. Ensure `slate --version` works in a terminal, or
+   select the executable in the plugin's permission settings when OpenIDEA
+   asks you to approve `process:slate`.
+3. Open the directory containing `slate.json` or a parent directory. Click
+   **Slate** in the left sidebar, expand your project, and open **Targets**.
+4. Choose a preset under **Presets** if needed. Use the tools icon to build
+   a target, the play icon to run an executable, or the beaker icon to run a test.
 
-Use OpenIDEA 0.1.46 or a later release supporting plugin API 1.9, and Slate
-0.1.14 or later. Download the `.oiplugin` package and install it from
-**Settings → Plugins → Install Plugin from Disk**.
-[Latest GitHub release](https://github.com/qigao/slates-openidea/releases/latest)
+Output appears in the **Run** panel when an OpenIDEA launch configuration is
+available, or in a named terminal for other project layouts.
 
-Approve the Slate executable when OpenIDEA asks for `process:slate`. Put the
-Slate bundle's `bin/` directory on `PATH`, or select the installed executable
-in the plugin's permission settings. Slate reads the project's `.env` and
-resolves toolchains as it does on the command line.
+Requires OpenIDEA 0.1.46 or later with plugin API 1.9 and Slate 0.1.14 or later.
 
-The plugin reads project files to discover manifests and presets
-(`project.read`), saves the selected preset in its own storage (`storage`),
-and invokes the approved Slate binary to read graphs and launch commands
-(`process:slate`).
+## Browse projects and choose a preset
+
+The project tree discovers `slate.json` at the workspace root and in
+subdirectories and nests projects under their directories. For example,
+`apps/fetch/slate.json` appears under **apps → fetch**. A project can contain
+further projects, and its own targets stay in its **Targets** branch.
+Each project keeps its own preset and target selection.
+The tree uses the same 16px Codicons and Slate sidebar mark as the VS Code
+extension. The gear on a project generates Ninja files; the preset button
+opens its **Presets** branch. Row actions appear on hover, selection, or
+keyboard focus. Colors and fonts follow the OpenIDEA theme.
+Targets follow their module folders, with shared libraries outside the
+project root under `external`. Open a target's source, header, or manifest
+from its tree. **Refresh** reloads all expanded projects after shared
+manifests change.
+
+Choose **Project default** to restore the manifest's preset selection. The
+toolbar also offers **Generate** and acts on the current selection. Slate
+reads the project's `.env` and resolves toolchains as it does on the command
+line. Run-panel launches enable Slate's ANSI status colors and honor
+`NO_COLOR`.
 
 ## Run targets with arguments
 
@@ -56,6 +58,13 @@ start the local server and save this in `apps/slate.run.json`.
 Use a Slate CLI that supports `libraries` for the HTTP example. Select the
 `apps` preset that matches the SDKs, then click **Run** on `hello`.
 
+## Permissions
+
+The plugin reads project files to discover manifests and presets
+(`project.read`), saves the selected preset in its own storage (`storage`),
+and invokes the approved Slate binary to read graphs and launch commands
+(`process:slate`).
+
 ## Develop
 
 Install a current Rust toolchain and the OpenIDEA plugin CLI. Then run:
@@ -69,3 +78,9 @@ openidea-plugin build
 
 The SDK is pinned to OpenIDEA v0.1.46. The same WebAssembly component is used
 on Windows, Linux, and macOS.
+
+To check the HTML tree in a browser, install Python Playwright and run
+`python tests/tree_ui.py`. It checks light, dark, high contrast, narrow layouts,
+inline actions, and keyboard focus. Screenshots are saved under `.dev/tree-ui`.
+
+See [third-party notices](NOTICE.md) for the bundled Codicons.

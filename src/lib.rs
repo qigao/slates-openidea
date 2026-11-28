@@ -172,6 +172,9 @@ impl Workspace {
     fn selection(&self, item: Option<&str>) -> Option<(String, Option<&Target>)> {
         let item = item.or(self.selected.as_deref());
         if let Some((kind, path, value)) = item.and_then(decode) {
+            if kind == "directory" {
+                return None;
+            }
             let project = self.projects.get(&path)?;
             let target = match kind {
                 "target" | "run" | "test" => Some(
@@ -455,6 +458,18 @@ impl Views for Slate {
                 } => ViewEvent::Collapse(key),
                 tree::Message::Select { key } => ViewEvent::Select(key),
                 tree::Message::Activate { key } => ViewEvent::Activate(key),
+                tree::Message::Presets { key: row } => {
+                    let Some(("project", path, _)) = decode(&row) else {
+                        return Err("Select a Slate project".into());
+                    };
+                    let state_project = state.projects.get(&path).ok_or("Unknown Slate project")?;
+                    if state_project.graph.is_none() {
+                        state.reload(&project, &root, &path);
+                    }
+                    state.selected = Some(row.clone());
+                    state.expanded.insert(row);
+                    ViewEvent::Expand(key("presets", &path, ""))
+                }
                 tree::Message::Launch { command, key } => {
                     let action = Action::from_id(&command).ok_or("Unknown Slate action")?;
                     return state.launch(&project, &root, Some(&key), action);
