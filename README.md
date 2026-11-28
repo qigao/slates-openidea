@@ -46,17 +46,19 @@ line. Run-panel launches enable Slate's ANSI status colors and honor
 ## Run targets with arguments
 
 Place `slate.run.json` beside the project's `slate.json` and map target names
-to argument arrays. For the [HTTP example](https://qigao.github.io/slates-build/examples.html#make-an-http-request),
-start the local server and save this in `apps/slate.run.json`.
+to argument arrays. For a target named `my_tool`, each array entry is one
+process argument.
 
 ```json
 {
-  "hello": ["tcp://127.0.0.1:8000", "127.0.0.1:8000", "/hello.c"]
+  "my_tool": ["--input", "file with spaces.txt"]
 }
 ```
 
-Use a Slate CLI that supports `libraries` for the HTTP example. Select the
-`apps` preset that matches the SDKs, then click **Run** on `hello`.
+To run the repository's
+[SDK walkthrough](https://qigao.github.io/slates-build/examples.html#export-and-consume-an-sdk),
+install the SDK, expand **apps → consumer**, and run `stats-demo` with the
+matching toolchain preset. That program needs no run arguments.
 
 ## Permissions
 
